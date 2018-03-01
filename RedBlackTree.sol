@@ -19,56 +19,44 @@ library RedBlackTree {
   }
   */
 
-  function parent(uint32 n) private returns (uint32) {
+  function parent(uint32 n) private returns (uint32 p) {
     //null checks in the lookup functions allow us to treat
     //null nodes as regular nodes which simplifies some of the
     //logic in the remove functions
-    uint32 p;
 
     if (n != 0) {
       p = uint32(Memory.read(n, 4, 0));
     }
-    return p;
   }
 
-  function left(uint32 n) private returns (uint32) {
-    uint32 p;
+  function left(uint32 n) private returns (uint32 l) {
     if (n != 0) {
-      p = uint32(Memory.read(n, 4, 4));
+      l = uint32(Memory.read(n, 4, 4));
     }
-    return p;
   }
 
-  function right(uint32 n) private returns (uint32) {
-    uint32 p;
+  function right(uint32 n) private returns (uint32 r) {
     if (n != 0) {
-      p = uint32(Memory.read(n, 4, 8));
+      r = uint32(Memory.read(n, 4, 8));
     }
-    return p;
   }
 
-  function isBlack(uint32 n) private returns (uint32) {
-    uint32 p;
+  function isBlack(uint32 n) private returns (uint32 b) {
     if (n != 0) {
-      p = uint32(Memory.read(n, 4, 12));
+      b = uint32(Memory.read(n, 4, 12));
     }
-    return p;
   }
 
-  function key(uint32 n) private returns (uint32) {
-    uint32 p;
+  function key(uint32 n) private returns (uint32 k) {
     if (n != 0) {
-      p = uint32(Memory.read(n, 4, 16));
+      k = uint32(Memory.read(n, 4, 16));
     }
-    return p;
   }
 
-  function value(uint32 n) private returns (uint32) {
-    uint32 p;
+  function value(uint32 n) private returns (bytes32 v) {
     if (n != 0) {
-      p = uint32(Memory.read(n, 32, 20));
+      v = Memory.read(n, 32, 20);
     }
-    return p;
   }
 
 
@@ -96,14 +84,13 @@ library RedBlackTree {
     Memory.write(n + 32, 32, 0, v);
   }
 
-  function newNode(uint32 k, uint32 v) private returns (uint32) {
-    uint n = Memory.allocate(2);
+  function newNode(uint32 k, bytes32 v) private returns (uint32 n) {
+    n = uint32(Memory.allocate(2));
     Memory.write(n, 4, 16, bytes32(k));
-    Memory.write(n + 32, 32, 0, bytes32(v));
-    return uint32(n);
+    Memory.write(n + 32, 32, 0, v);
   }
 
-  function nodeCopy(uint32 d, uint32 s) private returns (uint32) {
+  function nodeCopy(uint32 d, uint32 s) private {
     Memory.write(d, 32, 0, Memory.read(s, 32, 0));
     Memory.write(d + 32, 32, 0, Memory.read(s + 32, 32, 0));
   }
@@ -111,8 +98,7 @@ library RedBlackTree {
   //utilities
   
   function grandparent(uint32 n) private returns (uint32) {
-    uint32 p = parent(n);
-    return parent(p);
+    return parent(parent(n));
   } 
 
   function sibling(uint32 n) private returns (uint32) {
@@ -126,11 +112,10 @@ library RedBlackTree {
   }
 
   function uncle(uint32 n) private returns (uint32) {
-    uint32 p = parent(n);
-    return sibling(p);
+    return sibling(parent(n));
   }
 
-  function rotateLeft(uint32 n) private returns (uint32) {
+  function rotateLeft(uint32 n) private {
     uint32 nnew = right(n);
     nodeCopy(right(n), left(nnew));
     nodeCopy(left(nnew), n);
@@ -138,23 +123,12 @@ library RedBlackTree {
     nodeCopy(parent(n), nnew);
   }
 
-  function rotateRight(uint32 n) private returns (uint32) {
+  function rotateRight(uint32 n) private {
     uint32 nnew = left(n);
     nodeCopy(left(n), right(nnew));
     nodeCopy(right(nnew), n);
     nodeCopy(parent(nnew), parent(n));
     nodeCopy(parent(n), nnew);
-  }
-
-  // insert
-
-  function insert(uint32 root, uint32 n) internal returns (uint32){
-    insertRecurse(root, n);
-    insertRepairTree(n);
-    root = n;
-    while (parent(root) != 0)
-      root = parent(root);
-    return root;
   }
 
   function insertRecurse(uint32 root, uint32 n) private {
@@ -164,22 +138,30 @@ library RedBlackTree {
         return;
       }
       else
-        nodeCopy(left(root), n);
+        writeLeft(root, n);
+      //set node props
+      writeParent(n, root);
+      writeLeft(n, 0);
+      writeRight(n, 0);
+      writeIsBlack(n, 0);
     }
-    else if (root != 0) {
+    else if (root != 0 && key(n) > key(root)) {
       if (right(root) != 0) {
         insertRecurse(right(root), n);
         return;
       }
       else
-        nodeCopy(right(root), n);
+        writeRight(root, n);
+      //set node props
+      writeParent(n, root);
+      writeLeft(n, 0);
+      writeRight(n, 0);
+      writeIsBlack(n, 0);
     }
-    
-    //set node props
-    writeParent(n, root);
-    writeLeft(n, 0);
-    writeRight(n, 0);
-    writeIsBlack(n, 0);
+    else {
+      //overwrite value
+      writeValue(root, value(n));
+    }
   }
 
   function insertRepairTree(uint32 n) private {
@@ -238,19 +220,6 @@ library RedBlackTree {
       rotateLeft(g);
     writeIsBlack(p, 1);
     writeIsBlack(g, 0);
-  }
-
-  //remove
-
-  function remove(uint32 n) internal {
-    if (left(n) == 0 && right(n) == 0)
-    {
-      if (left(parent(n)) == n)
-        writeLeft(parent(n), 0);
-      else
-        writeRight(parent(n), 0);
-    }
-    else removeOneChild(n);
   }
 
   function removeOneChild(uint32 n) private {
@@ -362,6 +331,49 @@ library RedBlackTree {
     }
   }
 
-  //searching
+  function search(uint32 n, uint32 k) private returns (uint32) {
+    if (n == 0 || key(n) == k)
+      return n;
+    else if (key(n) < k)
+      return search(left(n), k);
+    return search(right(n), k);
+  }
 
+  /////////////////////////
+  //User-facing functions//
+  /////////////////////////
+
+  function insert(Tree memory tree, uint32 key, bytes32 value) internal {
+    uint32 n = newNode(key, value);
+    insertRecurse(tree.root, n);
+    insertRepairTree(n);
+    tree.root = n;
+    while (parent(tree.root) != 0)
+      tree.root = parent(tree.root);
+  }
+
+  //todo: in cases where root is modified, must update
+  //todo: inc and dec size
+  function remove(Tree memory tree, uint32 key) internal {
+    uint32 n = search(tree.root, key);
+    if (n == 0)
+      return;
+    if (left(n) == 0 && right(n) == 0)
+    {
+      uint32 p = parent(n);
+      if (p == 0)
+        tree.root = 0;
+      else if (left(p) == n)
+        writeLeft(p, 0);
+      else
+        writeRight(p, 0);
+    }
+    else removeOneChild(n);
+  }
+
+  function find(Tree memory tree, uint32 key) internal returns (bytes32) {
+    return value(search(tree.root, key));
+  }
+
+  //todo iterators
 }
