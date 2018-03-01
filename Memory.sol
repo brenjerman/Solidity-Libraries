@@ -1,8 +1,6 @@
 pragma solidity ^0.4.20;
 
-library Memory {
-    bytes32 constant bitMask = 2 ** 256 - 1;
-    
+library Memory {    
     function allocate(uint sizeSlots) internal pure returns(uint) {
         if(sizeSlots == 0) return  0;
         
